@@ -1,9 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { experimental_useObject } from "ai/react";
-import { questionsSchema } from "@/lib/schemas";
-import { z } from "zod";
+import { experimental_useObject as useObject } from "@ai-sdk/react";
+import {  keywordAnalysisSchema } from "@/lib/schemas";
 import { toast } from "sonner";
 import { FileUp, Plus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,36 +14,31 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import Quiz from "@/components/quiz";
-import { Link } from "@/components/ui/link";
+
 import NextLink from "next/link";
-import { generateQuizTitle } from "./actions";
 import { AnimatePresence, motion } from "framer-motion";
 import { VercelIcon, GitIcon } from "@/components/icons";
 
 export default function ChatWithFiles() {
   const [files, setFiles] = useState<File[]>([]);
-  const [questions, setQuestions] = useState<z.infer<typeof questionsSchema>>(
-    [],
-  );
   const [isDragging, setIsDragging] = useState(false);
-  const [title, setTitle] = useState<string>();
+  const [jobDescription, setJobDescription] = useState<string>("");
 
-  const {
+const {
     submit,
-    object: partialQuestions,
+    object: keywordAnalysis,
     isLoading,
-  } = experimental_useObject({
-    api: "/api/generate-quiz",
-    schema: questionsSchema,
+  } = useObject({
+    api: "/api/analyze-resume",
+    schema: keywordAnalysisSchema,
     initialValue: undefined,
     onError: (error) => {
-      toast.error("Failed to generate quiz. Please try again.");
+      toast.error("Failed to generate report. Please try again.");
       setFiles([]);
+      setJobDescription("");
     },
-    onFinish: ({ object }) => {
-      setQuestions(object ?? []);
+    onFinish: (data) => {
+      
     },
   });
 
@@ -62,7 +56,6 @@ export default function ChatWithFiles() {
     const validFiles = selectedFiles.filter(
       (file) => file.type === "application/pdf" && file.size <= 5 * 1024 * 1024,
     );
-    console.log(validFiles);
 
     if (validFiles.length !== selectedFiles.length) {
       toast.error("Only PDF files under 5MB are allowed.");
@@ -89,21 +82,65 @@ export default function ChatWithFiles() {
         data: await encodeFileAsBase64(file),
       })),
     );
-    submit({ files: encodedFiles });
-    const generatedTitle = await generateQuizTitle(encodedFiles[0].name);
-    setTitle(generatedTitle);
+    submit({ files: encodedFiles, jobDescription: jobDescription  });
   };
 
   const clearPDF = () => {
     setFiles([]);
-    setQuestions([]);
+    setJobDescription('');
   };
 
-  const progress = partialQuestions ? (partialQuestions.length / 4) * 100 : 0;
 
-  if (questions.length === 4) {
+  if (keywordAnalysis) {
     return (
-      <Quiz title={title ?? "Quiz"} questions={questions} clearPDF={clearPDF} />
+      <div className="container mx-auto px-4 py-12 max-w-4xl">
+        <Card>
+          <CardHeader>
+            <CardTitle>Resume Analysis Results</CardTitle>
+            <CardDescription>Based on the provided job description</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div>
+              <h3 className="text-lg font-semibold mb-2">Matching Keywords</h3>
+              <div className="flex flex-wrap gap-2">
+                {keywordAnalysis.matchingKeywords?.map((keyword, index) => (
+                  <span key={index} className="px-2 py-1 bg-green-100 text-green-800 rounded">
+                    {keywordAnalysis.matchingKeywords?.length == 0 ? 'No Keywords Matched' : keyword}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold mb-2">Missing Keywords</h3>
+              <div className="flex flex-wrap gap-2">
+                {keywordAnalysis.missingKeywords?.map((keyword, index) => (
+                  <span key={index} className="px-2 py-1 bg-red-100 text-red-800 rounded">
+                    {keywordAnalysis.missingKeywords?.length === 0 ? 'All Keywords Matched' : keyword}
+                  </span>
+                ))}
+              </div>
+              <Button
+                onClick={() => {
+                  const keywords = keywordAnalysis.missingKeywords?.join(', ') ?? '';
+                  navigator.clipboard.writeText(keywords).then(() => {
+                    toast.success('Missing keywords copied to clipboard!');
+                  }).catch(() => {
+                    toast.error('Failed to copy keywords to clipboard');
+                  });
+                }}
+                variant="outline"
+                className="mt-4"
+                size="sm"
+              >
+                Copy Missing Keywords
+              </Button>
+            </div>
+            <Button onClick={clearPDF} className="w-full mt-4">
+              Analyze Another Resume
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
@@ -120,7 +157,6 @@ export default function ChatWithFiles() {
       onDrop={(e) => {
         e.preventDefault();
         setIsDragging(false);
-        console.log(e.dataTransfer.files);
         handleFileChange({
           target: { files: e.dataTransfer.files },
         } as React.ChangeEvent<HTMLInputElement>);
@@ -154,23 +190,19 @@ export default function ChatWithFiles() {
           </div>
           <div className="space-y-2">
             <CardTitle className="text-2xl font-bold">
-              PDF Quiz Generator
+              Resume Checker AI
             </CardTitle>
             <CardDescription className="text-base">
-              Upload a PDF to generate an interactive quiz based on its content
-              using the <Link href="https://sdk.vercel.ai">AI SDK</Link> and{" "}
-              <Link href="https://sdk.vercel.ai/providers/ai-sdk-providers/google-generative-ai">
-                Google&apos;s Gemini Pro
-              </Link>
-              .
+              Land More Interviews With My FREE ATS Resume Checker Using AI.
             </CardDescription>
           </div>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmitWithFiles} className="space-y-4">
-            <div
-              className={`relative flex flex-col items-center justify-center border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 transition-colors hover:border-muted-foreground/50`}
-            >
+            <div className="space-y-4">
+              <div
+                className={`relative flex flex-col items-center justify-center border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 transition-colors hover:border-muted-foreground/50`}
+              >
               <input
                 type="file"
                 onChange={handleFileChange}
@@ -187,32 +219,35 @@ export default function ChatWithFiles() {
                   <span>Drop your PDF here or click to browse.</span>
                 )}
               </p>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Job Description</label>
+                <textarea
+                  value={jobDescription}
+                  onChange={(e) => setJobDescription(e.target.value)}
+                  placeholder="Paste the job description here..."
+                  className="w-full min-h-[150px] p-3 rounded-md border border-input bg-background text-sm resize-y"
+                />
+              </div>
             </div>
             <Button
               type="submit"
               className="w-full"
-              disabled={files.length === 0}
+              disabled={files.length === 0 || !jobDescription}
             >
               {isLoading ? (
                 <span className="flex items-center space-x-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>Generating Quiz...</span>
+                  <span>Analyzing Resume...</span>
                 </span>
               ) : (
-                "Generate Quiz"
+                "Analyze Resume"
               )}
             </Button>
           </form>
         </CardContent>
         {isLoading && (
           <CardFooter className="flex flex-col space-y-4">
-            <div className="w-full space-y-1">
-              <div className="flex justify-between text-sm text-muted-foreground">
-                <span>Progress</span>
-                <span>{Math.round(progress)}%</span>
-              </div>
-              <Progress value={progress} className="h-2" />
-            </div>
             <div className="w-full space-y-2">
               <div className="grid grid-cols-6 sm:grid-cols-4 items-center space-x-2 text-sm">
                 <div
@@ -221,9 +256,7 @@ export default function ChatWithFiles() {
                   }`}
                 />
                 <span className="text-muted-foreground text-center col-span-4 sm:col-span-2">
-                  {partialQuestions
-                    ? `Generating question ${partialQuestions.length + 1} of 4`
-                    : "Analyzing PDF content"}
+                 Generating Detailed Report Please Wait...
                 </span>
               </div>
             </div>
@@ -237,20 +270,20 @@ export default function ChatWithFiles() {
       >
         <NextLink
           target="_blank"
-          href="https://github.com/vercel-labs/ai-sdk-preview-pdf-support"
+          href="https://github.com/sabiehahmed10p"
           className="flex flex-row gap-2 items-center border px-2 py-1.5 rounded-md hover:bg-zinc-100 dark:border-zinc-800 dark:hover:bg-zinc-800"
         >
           <GitIcon />
-          View Source Code
+          Visit Github
         </NextLink>
 
         <NextLink
           target="_blank"
-          href="https://vercel.com/templates/next.js/ai-quiz-generator"
+          href="https://sabiehahmed.com"
           className="flex flex-row gap-2 items-center bg-zinc-900 px-2 py-1.5 rounded-md text-zinc-50 hover:bg-zinc-950 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-50"
         >
           <VercelIcon size={14} />
-          Deploy with Vercel
+          Made with ❤️ by Sabieh
         </NextLink>
       </motion.div>
     </div>
