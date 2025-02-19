@@ -3,6 +3,7 @@ import { Metadata } from "next";
 import { Toaster } from "sonner";
 import { ThemeProvider } from "next-themes";
 import { Geist } from "next/font/google";
+import { Analytics } from "@vercel/analytics/react"
 
 const geist = Geist({ subsets: ["latin"] });
 
@@ -24,6 +25,7 @@ export default function RootLayout({
           <Toaster position="top-center" richColors />
           {children}
         </ThemeProvider>
+        <Analytics />
       </body>
     </html>
   );
